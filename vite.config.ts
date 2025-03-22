@@ -15,10 +15,10 @@ export default defineConfig({
       defaultIsModuleExports: true,
     },
     rollupOptions: {
-      external: ['attr-accept'],
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
+          'pdf-vendor': ['pdfjs-dist/build/pdf'],
         },
       },
     },
@@ -28,8 +28,6 @@ export default defineConfig({
       'pdfjs-dist': path.resolve(__dirname, 'node_modules/pdfjs-dist'),
       'pdfjs-dist/build/pdf': path.resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.js'),
       'pdfjs-dist/build/pdf.worker': path.resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.worker.js'),
-      'react': path.resolve(__dirname, 'node_modules/react'),
-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
   },
   server: {

@@ -16,12 +16,7 @@ export function FileUpload({ onFileUpload }: FileUploadProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt']
-    },
+    accept: '.pdf,.doc,.docx,.txt',
     maxFiles: 1
   });
 
