@@ -15,34 +15,55 @@ export interface ProcessedResume {
 }
 
 export async function processResume(file: File, jobDescription: string = ''): Promise<ProcessedResume> {
-  let content = '';
+  try {
+    console.log('Processing resume for job description:', jobDescription);
+    
+    // Extract content from file
+    let content = '';
+    if (file.type === 'application/pdf') {
+      content = await extractPdfContent(file);
+    } else if (file.type.includes('word')) {
+      content = await extractDocxContent(file);
+    } else {
+      content = await file.text();
+    }
+    console.log('Extracted content:', content);
 
-  if (file.type === 'application/pdf') {
-    content = await extractPdfContent(file);
-  } else if (file.type.includes('word')) {
-    content = await extractDocxContent(file);
-  } else {
-    content = await file.text();
+    // Extract keywords from job description
+    const keywords = extractKeywords(jobDescription);
+    console.log('Extracted keywords:', keywords);
+    
+    // Extract and organize resume sections
+    const sections = extractResumeSections(content);
+    console.log('Extracted sections:', sections);
+    
+    // Optimize content for ATS using sections
+    const optimizedContent = optimizeContentForATS(sections, keywords);
+    console.log('Optimized content:', optimizedContent);
+    
+    // Calculate ATS score
+    const score = calculateATSScore(optimizedContent, keywords);
+    console.log('ATS Score:', score);
+
+    // Format the final content
+    const formattedContent = formatResumeContent(optimizedContent, jobDescription);
+    console.log('Formatted content:', formattedContent);
+
+    if (!formattedContent || formattedContent.trim() === '') {
+      console.error('Empty formatted content detected');
+      throw new Error('Failed to format resume content');
+    }
+
+    return {
+      content: formattedContent,
+      keywords,
+      score,
+      optimizedContent
+    };
+  } catch (error) {
+    console.error('Error processing resume:', error);
+    throw new Error('Failed to process resume. Please try again.');
   }
-
-  // Extract keywords from job description
-  const keywords = extractKeywords(jobDescription);
-  
-  // Format and optimize the resume content
-  const formattedContent = formatResumeContent(content, jobDescription);
-  
-  // Optimize content for ATS
-  const optimizedContent = optimizeContentForATS(formattedContent, keywords);
-  
-  // Calculate ATS score
-  const score = calculateATSScore(optimizedContent, keywords);
-
-  return {
-    content: formattedContent,
-    keywords,
-    score,
-    optimizedContent
-  };
 }
 
 async function extractPdfContent(file: File): Promise<string> {
@@ -130,6 +151,7 @@ function extractKeywords(jobDescription: string): string[] {
 interface ResumeSection {
   title: string;
   content: string[];
+  type: 'summary' | 'experience' | 'education' | 'skills' | 'achievements' | 'projects' | 'languages' | 'other';
 }
 
 function extractResumeSections(content: string): ResumeSection[] {
@@ -137,23 +159,55 @@ function extractResumeSections(content: string): ResumeSection[] {
   const lines = content.split('\n');
   let currentSection: ResumeSection | null = null;
 
+  // Common section headers and their types
+  const sectionTypes: Record<string, ResumeSection['type']> = {
+    'SUMMARY': 'summary',
+    'OBJECTIVE': 'summary',
+    'PROFESSIONAL SUMMARY': 'summary',
+    'EXPERIENCE': 'experience',
+    'WORK EXPERIENCE': 'experience',
+    'EMPLOYMENT': 'experience',
+    'EDUCATION': 'education',
+    'SKILLS': 'skills',
+    'TECHNICAL SKILLS': 'skills',
+    'ACHIEVEMENTS': 'achievements',
+    'PROJECTS': 'projects',
+    'LANGUAGES': 'languages'
+  };
+
   lines.forEach(line => {
     const trimmedLine = line.trim();
     if (!trimmedLine) return;
 
-    // Check if this is a section header (all caps or common section titles)
-    if (trimmedLine === trimmedLine.toUpperCase() || 
-        ['SUMMARY', 'OBJECTIVE', 'EXPERIENCE', 'EDUCATION', 'SKILLS', 'ACHIEVEMENTS', 'PROJECTS', 'LANGUAGES']
-          .includes(trimmedLine.toUpperCase())) {
+    // Check if this is a section header
+    const upperLine = trimmedLine.toUpperCase();
+    const sectionType = sectionTypes[upperLine as keyof typeof sectionTypes];
+    
+    if (sectionType) {
       if (currentSection) {
         sections.push(currentSection);
       }
       currentSection = {
         title: trimmedLine,
-        content: []
+        content: [],
+        type: sectionType
       };
     } else if (currentSection) {
-      currentSection.content.push(trimmedLine);
+      // Clean and format the content
+      const formattedLine = formatLine(trimmedLine);
+      if (formattedLine) {
+        currentSection.content.push(formattedLine);
+      }
+    } else {
+      // If no section is currently active, create a default section
+      const formattedLine = formatLine(trimmedLine);
+      if (formattedLine) {
+        currentSection = {
+          title: 'OTHER',
+          content: [formattedLine],
+          type: 'other'
+        };
+      }
     }
   });
 
@@ -161,27 +215,40 @@ function extractResumeSections(content: string): ResumeSection[] {
     sections.push(currentSection);
   }
 
+  console.log('Extracted sections:', sections);
   return sections;
 }
 
-function optimizeContentForATS(content: string, keywords: string[]): string {
-  const sections = extractResumeSections(content);
-  const optimizedSections = sections.map(section => {
-    const title = section.title;
-    const content = section.content;
+function formatLine(line: string): string {
+  // Remove multiple spaces
+  line = line.replace(/\s+/g, ' ');
+  
+  // Format bullet points consistently
+  if (line.match(/^[-•*]\s/)) {
+    return '• ' + line.substring(2).trim();
+  }
+  
+  // Format dates consistently
+  line = line.replace(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/g, '$1/$2/$3');
+  
+  return line.trim();
+}
 
-    switch (title.toUpperCase()) {
-      case 'SUMMARY':
-      case 'OBJECTIVE':
-        return optimizeSummary(title, content, keywords);
-      case 'EXPERIENCE':
-        return optimizeExperience(title, content, keywords);
-      case 'SKILLS':
-        return optimizeSkills(title, content, keywords);
-      case 'ACHIEVEMENTS':
-        return optimizeAchievements(title, content, keywords);
+function optimizeContentForATS(sections: ResumeSection[], keywords: string[]): string {
+  const optimizedSections = sections.map(section => {
+    switch (section.type) {
+      case 'summary':
+        return optimizeSummary(section.title, section.content, keywords);
+      case 'experience':
+        return optimizeExperience(section.title, section.content, keywords);
+      case 'skills':
+        return optimizeSkills(section.title, section.content, keywords);
+      case 'achievements':
+        return optimizeAchievements(section.title, section.content, keywords);
+      case 'projects':
+        return optimizeProjects(section.title, section.content, keywords);
       default:
-        return `${title}\n${content.join('\n')}`;
+        return `${section.title}\n${section.content.join('\n')}`;
     }
   });
 
@@ -301,6 +368,29 @@ function optimizeAchievements(title: string, content: string[], keywords: string
       if (missingKeywords.length > 0) {
         const relevantKeyword = missingKeywords[0];
         return `• ${achievement} using ${relevantKeyword}`;
+      }
+    }
+    return line;
+  });
+
+  return `${title}\n${optimizedContent.join('\n')}`;
+}
+
+function optimizeProjects(title: string, content: string[], keywords: string[]): string {
+  const optimizedContent = content.map(line => {
+    if (line.startsWith('•')) {
+      const project = line.substring(1).trim();
+      const missingKeywords = keywords.filter(keyword => 
+        !project.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      if (missingKeywords.length > 0) {
+        const technicalKeywords = missingKeywords.filter(k => 
+          k.includes('javascript') || k.includes('python') || k.includes('java') || 
+          k.includes('react') || k.includes('sql') || k.includes('aws')
+        );
+        const relevantKeywords = technicalKeywords.slice(0, 2);
+        return `• ${project} using ${relevantKeywords.join(' and ')}`;
       }
     }
     return line;

@@ -59,11 +59,11 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <FileText className="h-8 w-8 text-blue-600" />
-              <h1 className="ml-2 text-2xl font-bold text-gray-900">
+              <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+              <h1 className="ml-2 text-xl sm:text-2xl font-bold text-gray-900">
                 ATS Resume Optimizer
               </h1>
             </div>
@@ -72,17 +72,17 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
           {/* Left Column */}
-          <div className="space-y-8">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">Upload Resume</h2>
+          <div className="space-y-4 sm:space-y-8">
+            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">Upload Resume</h2>
               <FileUpload onFileUpload={handleFileUpload} />
               {error && (
-                <div className="mt-4 p-4 bg-red-50 rounded-md flex items-center text-red-700">
+                <div className="mt-4 p-3 sm:p-4 bg-red-50 rounded-md flex items-center text-red-700">
                   <AlertCircle className="h-5 w-5 mr-2" />
-                  <span>{error}</span>
+                  <span className="text-sm sm:text-base">{error}</span>
                 </div>
               )}
             </div>
@@ -90,23 +90,23 @@ function App() {
           </div>
 
           {/* Right Column */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Optimization Status</h2>
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">Optimization Status</h2>
             <div className="space-y-4">
               <div className="flex items-center text-gray-600">
                 <Settings className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                <span>
+                <span className="text-sm sm:text-base">
                   {loading ? 'Processing resume...' : 'Ready to analyze'}
                 </span>
               </div>
               {processedResume && (
                 <div className="flex items-center text-gray-600">
                   <CheckCircle className="h-5 w-5 mr-2 text-green-500" />
-                  <span>Resume processed successfully</span>
+                  <span className="text-sm sm:text-base">Resume processed successfully</span>
                 </div>
               )}
               {processedResume && processedResume.keywords && processedResume.keywords.length > 0 && (
-                <div className="mt-6">
+                <div className="mt-4 sm:mt-6">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">
                     Detected Keywords
                   </h3>
@@ -114,7 +114,7 @@ function App() {
                     {processedResume.keywords.map((keyword, index) => (
                       <span
                         key={index}
-                        className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
+                        className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs sm:text-sm"
                       >
                         {keyword}
                       </span>
