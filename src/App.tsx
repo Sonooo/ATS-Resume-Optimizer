@@ -58,7 +58,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
@@ -119,6 +119,24 @@ function App() {
                         {keyword}
                       </span>
                     ))}
+                  </div>
+                </div>
+              )}
+              {processedResume && (
+                <div className="mt-4 sm:mt-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">
+                    ATS Score
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 rounded-full h-2 transition-all duration-300"
+                        style={{ width: `${processedResume.score}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-blue-600">
+                      {processedResume.score}%
+                    </span>
                   </div>
                 </div>
               )}
