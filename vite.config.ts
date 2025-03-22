@@ -6,12 +6,21 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['pdfjs-dist/build/pdf'],
+    include: ['pdfjs-dist/build/pdf', 'react', 'react-dom'],
     exclude: ['lucide-react'],
   },
   build: {
     commonjsOptions: {
-      include: [/pdfjs-dist/],
+      include: [/pdfjs-dist/, /node_modules/],
+      defaultIsModuleExports: true,
+    },
+    rollupOptions: {
+      external: ['attr-accept'],
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+        },
+      },
     },
   },
   resolve: {
@@ -19,6 +28,8 @@ export default defineConfig({
       'pdfjs-dist': path.resolve(__dirname, 'node_modules/pdfjs-dist'),
       'pdfjs-dist/build/pdf': path.resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.js'),
       'pdfjs-dist/build/pdf.worker': path.resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.worker.js'),
+      'react': path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
   },
   server: {
