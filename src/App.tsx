@@ -6,34 +6,39 @@ import { FileText, Settings, CheckCircle, AlertCircle } from 'lucide-react';
 import { processResume, generateDownloadFile, type ProcessedResume } from './lib/resumeProcessor';
 
 function App() {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
   const [processedResume, setProcessedResume] = useState<ProcessedResume | null>(null);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jobDescription, setJobDescription] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   const handleFileUpload = async (file: File) => {
+    setFile(file);
+    setError(null);
+    setLoading(true);
+
     try {
-      setProcessing(true);
-      setError(null);
-      setUploadedFile(file);
-      
-      const processed = await processResume(file);
-      setProcessedResume(processed);
-      setShowDownloadModal(true);
+      const result = await processResume(file, jobDescription);
+      setProcessedResume(result);
     } catch (err) {
       setError('Error processing resume. Please try again.');
       console.error(err);
     } finally {
-      setProcessing(false);
+      setLoading(false);
     }
+  };
+
+  const handleJobDescriptionChange = (description: string) => {
+    setJobDescription(description);
   };
 
   const handleDownload = async (format: 'pdf' | 'docx' | 'txt') => {
     if (!processedResume) return;
 
     try {
-      const blob = await generateDownloadFile(processedResume.content, format);
+      setDownloading(true);
+      const blob = await generateDownloadFile(processedResume.optimizedContent, format);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -42,9 +47,11 @@ function App() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err) {
-      setError('Error downloading file. Please try again.');
-      console.error(err);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      setError('Failed to download file. Please try again.');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -79,7 +86,7 @@ function App() {
                 </div>
               )}
             </div>
-            <JobDescription />
+            <JobDescription onJobDescriptionChange={handleJobDescriptionChange} />
           </div>
 
           {/* Right Column */}
@@ -87,9 +94,9 @@ function App() {
             <h2 className="text-xl font-semibold mb-4">Optimization Status</h2>
             <div className="space-y-4">
               <div className="flex items-center text-gray-600">
-                <Settings className={`h-5 w-5 mr-2 ${processing ? 'animate-spin' : ''}`} />
+                <Settings className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 <span>
-                  {processing ? 'Processing resume...' : 'Ready to analyze'}
+                  {loading ? 'Processing resume...' : 'Ready to analyze'}
                 </span>
               </div>
               {processedResume && (
@@ -98,7 +105,7 @@ function App() {
                   <span>Resume processed successfully</span>
                 </div>
               )}
-              {processedResume?.keywords.length > 0 && (
+              {processedResume && processedResume.keywords && processedResume.keywords.length > 0 && (
                 <div className="mt-6">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">
                     Detected Keywords
@@ -121,8 +128,8 @@ function App() {
       </main>
 
       <DownloadModal
-        isOpen={showDownloadModal}
-        onClose={() => setShowDownloadModal(false)}
+        isOpen={processedResume !== null}
+        onClose={() => setProcessedResume(null)}
         onDownload={handleDownload}
         score={processedResume?.score || 0}
       />

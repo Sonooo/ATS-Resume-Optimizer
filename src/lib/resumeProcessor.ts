@@ -1,7 +1,8 @@
 import * as mammoth from 'mammoth';
 import * as PDFJS from 'pdfjs-dist/build/pdf';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, Spacing } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { jsPDF } from 'jspdf';
+import { formatResumeContent } from './resumeTemplate';
 
 // Configure PDF.js worker
 PDFJS.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -10,9 +11,10 @@ export interface ProcessedResume {
   content: string;
   keywords: string[];
   score: number;
+  optimizedContent: string;
 }
 
-export async function processResume(file: File): Promise<ProcessedResume> {
+export async function processResume(file: File, jobDescription: string = ''): Promise<ProcessedResume> {
   let content = '';
 
   if (file.type === 'application/pdf') {
@@ -23,13 +25,23 @@ export async function processResume(file: File): Promise<ProcessedResume> {
     content = await file.text();
   }
 
-  const keywords = extractKeywords(content);
-  const score = calculateATSScore(content, keywords);
+  // Extract keywords from job description
+  const keywords = extractKeywords(jobDescription);
+  
+  // Format and optimize the resume content
+  const formattedContent = formatResumeContent(content, jobDescription);
+  
+  // Optimize content for ATS
+  const optimizedContent = optimizeContentForATS(formattedContent, keywords);
+  
+  // Calculate ATS score
+  const score = calculateATSScore(optimizedContent, keywords);
 
   return {
-    content: formatContent(content),
+    content: formattedContent,
     keywords,
-    score
+    score,
+    optimizedContent
   };
 }
 
@@ -53,77 +65,312 @@ async function extractDocxContent(file: File): Promise<string> {
   return result.value;
 }
 
-function extractKeywords(content: string): string[] {
-  // Enhanced keyword extraction
+function extractKeywords(jobDescription: string): string[] {
   const commonKeywords = [
-    'experience', 'skills', 'education', 'projects', 'achievements',
-    'javascript', 'typescript', 'react', 'node', 'git', 'api',
-    'development', 'programming', 'software', 'engineering',
-    'communication', 'problem-solving', 'team', 'leadership'
+    'experience', 'skills', 'leadership', 'management', 'development',
+    'project', 'team', 'communication', 'problem solving', 'analytical',
+    'technical', 'creative', 'organized', 'detail-oriented', 'results-driven',
+    'innovative', 'collaborative', 'strategic', 'efficient', 'proactive',
+    'responsible', 'dedicated', 'motivated', 'self-starter', 'team player',
+    'attention to detail', 'time management', 'project management', 'quality assurance',
+    'achievement', 'improvement', 'growth', 'success', 'expertise', 'proficiency',
+    'coordination', 'planning', 'execution', 'analysis', 'optimization',
+    'implementation', 'development', 'design', 'testing', 'deployment'
   ];
+
+  const technicalKeywords = [
+    'javascript', 'python', 'java', 'c++', 'sql', 'html', 'css',
+    'react', 'angular', 'vue', 'node.js', 'express', 'mongodb',
+    'aws', 'docker', 'kubernetes', 'git', 'agile', 'scrum',
+    'machine learning', 'data analysis', 'cloud computing',
+    'typescript', 'next.js', 'graphql', 'rest api', 'microservices',
+    'ci/cd', 'devops', 'testing', 'debugging', 'code review',
+    'web development', 'mobile development', 'database', 'api',
+    'frontend', 'backend', 'full stack', 'ui/ux', 'responsive design',
+    'cross-browser', 'version control', 'unit testing', 'integration testing'
+  ];
+
+  const keywords = new Set<string>();
+
+  // Extract important terms from job description
+  const words = jobDescription.toLowerCase().split(/\s+/);
+  const phrases = jobDescription.toLowerCase().split(/[.,]/).map(p => p.trim());
+
+  // Add individual words with better filtering
+  words.forEach(word => {
+    if (word.length > 3 && !['the', 'and', 'for', 'with', 'from', 'have', 'were', 'this', 'that', 'these', 'those', 'they', 'their', 'there'].includes(word)) {
+      keywords.add(word);
+    }
+  });
+
+  // Add phrases with better filtering
+  phrases.forEach(phrase => {
+    if (phrase.length > 5 && !phrase.includes('and') && !phrase.includes('the')) {
+      keywords.add(phrase);
+    }
+  });
+
+  // Add common keywords that are relevant to most jobs
+  commonKeywords.forEach(keyword => {
+    if (!keywords.has(keyword)) {
+      keywords.add(keyword);
+    }
+  });
+
+  // Add technical keywords if they appear in the job description
+  technicalKeywords.forEach(keyword => {
+    if (jobDescription.toLowerCase().includes(keyword)) {
+      keywords.add(keyword);
+    }
+  });
+
+  return Array.from(keywords);
+}
+
+interface ResumeSection {
+  title: string;
+  content: string[];
+}
+
+function extractResumeSections(content: string): ResumeSection[] {
+  const sections: ResumeSection[] = [];
+  const lines = content.split('\n');
+  let currentSection: ResumeSection | null = null;
+
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return;
+
+    // Check if this is a section header (all caps or common section titles)
+    if (trimmedLine === trimmedLine.toUpperCase() || 
+        ['SUMMARY', 'OBJECTIVE', 'EXPERIENCE', 'EDUCATION', 'SKILLS', 'ACHIEVEMENTS', 'PROJECTS', 'LANGUAGES']
+          .includes(trimmedLine.toUpperCase())) {
+      if (currentSection) {
+        sections.push(currentSection);
+      }
+      currentSection = {
+        title: trimmedLine,
+        content: []
+      };
+    } else if (currentSection) {
+      currentSection.content.push(trimmedLine);
+    }
+  });
+
+  if (currentSection) {
+    sections.push(currentSection);
+  }
+
+  return sections;
+}
+
+function optimizeContentForATS(content: string, keywords: string[]): string {
+  const sections = extractResumeSections(content);
+  const optimizedSections = sections.map(section => {
+    const title = section.title;
+    const content = section.content;
+
+    switch (title.toUpperCase()) {
+      case 'SUMMARY':
+      case 'OBJECTIVE':
+        return optimizeSummary(title, content, keywords);
+      case 'EXPERIENCE':
+        return optimizeExperience(title, content, keywords);
+      case 'SKILLS':
+        return optimizeSkills(title, content, keywords);
+      case 'ACHIEVEMENTS':
+        return optimizeAchievements(title, content, keywords);
+      default:
+        return `${title}\n${content.join('\n')}`;
+    }
+  });
+
+  return optimizedSections.join('\n\n');
+}
+
+function optimizeSummary(title: string, content: string[], keywords: string[]): string {
+  const summary = content.join(' ');
   
-  const words = content.toLowerCase().match(/\b\w+\b/g) || [];
-  return Array.from(new Set(words.filter(word => 
-    word.length > 3 && commonKeywords.includes(word)
-  )));
+  // Add missing important keywords to summary
+  const missingKeywords = keywords.filter(keyword => 
+    !summary.toLowerCase().includes(keyword.toLowerCase())
+  );
+
+  if (missingKeywords.length > 0) {
+    // Prioritize technical and soft skills
+    const technicalKeywords = missingKeywords.filter(k => 
+      k.includes('javascript') || k.includes('python') || k.includes('java') || 
+      k.includes('react') || k.includes('sql') || k.includes('aws')
+    );
+    const softKeywords = missingKeywords.filter(k => 
+      k.includes('leadership') || k.includes('communication') || 
+      k.includes('problem solving') || k.includes('team')
+    );
+
+    // Create a more natural-sounding summary with prioritized keywords
+    const enhancedSummary = summary + ' ' + 
+      `Demonstrating expertise in ${[...technicalKeywords, ...softKeywords].slice(0, 3).map(keyword => 
+        keyword.charAt(0).toUpperCase() + keyword.slice(1)
+      ).join(', ')}. ` +
+      `Proven track record of ${missingKeywords.slice(0, 3).map(keyword => 
+        keyword.charAt(0).toUpperCase() + keyword.slice(1)
+      ).join(' and ')}.`;
+    
+    return `${title}\n${enhancedSummary}`;
+  }
+
+  return `${title}\n${content.join('\n')}`;
+}
+
+function optimizeExperience(title: string, content: string[], keywords: string[]): string {
+  const optimizedContent = content.map(line => {
+    if (line.startsWith('•')) {
+      // Enhance bullet points with relevant keywords
+      const bulletContent = line.substring(1).trim();
+      const missingKeywords = keywords.filter(keyword => 
+        !bulletContent.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      if (missingKeywords.length > 0) {
+        // Prioritize technical skills and achievements
+        const technicalKeywords = missingKeywords.filter(k => 
+          k.includes('javascript') || k.includes('python') || k.includes('java') || 
+          k.includes('react') || k.includes('sql') || k.includes('aws')
+        );
+        const achievementKeywords = missingKeywords.filter(k => 
+          k.includes('improved') || k.includes('increased') || k.includes('reduced') ||
+          k.includes('achieved') || k.includes('developed')
+        );
+
+        // Create more impactful bullet points with prioritized keywords
+        const relevantKeywords = [...technicalKeywords, ...achievementKeywords].slice(0, 2);
+        const enhancedContent = bulletContent + 
+          ` utilizing ${relevantKeywords[0]} and ${relevantKeywords[1]}`;
+        return `• ${enhancedContent}`;
+      }
+    }
+    return line;
+  });
+
+  return `${title}\n${optimizedContent.join('\n')}`;
+}
+
+function optimizeSkills(title: string, content: string[], keywords: string[]): string {
+  const optimizedContent = content.map(line => {
+    if (line.toLowerCase().includes('technical') || line.toLowerCase().includes('soft')) {
+      const existingSkills = line.split(':')[1]?.split(',').map(s => s.trim()) || [];
+      const missingKeywords = keywords.filter(keyword => 
+        !existingSkills.some(skill => skill.toLowerCase().includes(keyword.toLowerCase()))
+      );
+
+      if (missingKeywords.length > 0) {
+        // Prioritize technical skills
+        const technicalKeywords = missingKeywords.filter(k => 
+          k.includes('javascript') || k.includes('python') || k.includes('java') || 
+          k.includes('react') || k.includes('sql') || k.includes('aws')
+        );
+        const softKeywords = missingKeywords.filter(k => 
+          k.includes('leadership') || k.includes('communication') || 
+          k.includes('problem solving') || k.includes('team')
+        );
+
+        // Add missing skills in a more organized way
+        const newSkills = [...existingSkills];
+        [...technicalKeywords, ...softKeywords].slice(0, 5).forEach(keyword => {
+          if (!newSkills.includes(keyword)) {
+            newSkills.push(keyword);
+          }
+        });
+        return `${line.split(':')[0]}: ${newSkills.join(', ')}`;
+      }
+    }
+    return line;
+  });
+
+  return `${title}\n${optimizedContent.join('\n')}`;
+}
+
+function optimizeAchievements(title: string, content: string[], keywords: string[]): string {
+  const optimizedContent = content.map(line => {
+    if (line.startsWith('•')) {
+      const achievement = line.substring(1).trim();
+      const missingKeywords = keywords.filter(keyword => 
+        !achievement.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      if (missingKeywords.length > 0) {
+        const relevantKeyword = missingKeywords[0];
+        return `• ${achievement} using ${relevantKeyword}`;
+      }
+    }
+    return line;
+  });
+
+  return `${title}\n${optimizedContent.join('\n')}`;
 }
 
 function calculateATSScore(content: string, keywords: string[]): number {
-  // Enhanced scoring based on keyword presence and formatting
-  let score = 0;
-  
-  // Check for required sections
-  const sections = ['experience', 'education', 'skills'];
-  sections.forEach(section => {
-    if (content.toLowerCase().includes(section)) score += 15;
-  });
+  const contentLower = content.toLowerCase();
+  let matchedKeywords = 0;
+  let totalWeight = 0;
 
-  // Check for keywords
+  // Define weights for different types of keywords
+  const weights = {
+    technical: 3,    // Technical skills
+    phrase: 2.5,     // Multi-word phrases
+    soft: 2,         // Soft skills
+    common: 1.5      // Common keywords
+  };
+
   keywords.forEach(keyword => {
-    if (content.toLowerCase().includes(keyword)) score += 10;
-  });
-
-  // Check for proper formatting
-  if (content.includes('\n')) score += 5; // Has line breaks
-  if (content.includes('•') || content.includes('-')) score += 5; // Has bullet points
-  if (content.match(/\d{4}/)) score += 5; // Has dates
-
-  return Math.min(100, score);
-}
-
-function formatContent(content: string): string {
-  // Split content into sections
-  const sections = content.split(/\n\s*\n/);
-  
-  // Process each section
-  const formattedSections = sections.map(section => {
-    // Clean up the section
-    section = section.trim();
+    let weight = weights.common;
     
-    // Add section headers if missing
-    if (!section.toLowerCase().includes('experience') && 
-        !section.toLowerCase().includes('education') && 
-        !section.toLowerCase().includes('skills')) {
-      // Try to detect section type based on content
-      if (section.match(/\d{4}/)) {
-        section = 'EXPERIENCE\n' + section;
-      } else if (section.toLowerCase().includes('degree') || 
-                 section.toLowerCase().includes('university') || 
-                 section.toLowerCase().includes('college')) {
-        section = 'EDUCATION\n' + section;
-      } else {
-        section = 'SKILLS\n' + section;
+    // Determine keyword type and assign weight
+    if (keyword.includes('javascript') || keyword.includes('python') || 
+        keyword.includes('java') || keyword.includes('react') || 
+        keyword.includes('sql') || keyword.includes('aws') ||
+        keyword.includes('docker') || keyword.includes('git')) {
+      weight = weights.technical;
+    } else if (keyword.includes(' ')) {
+      weight = weights.phrase;
+    } else if (keyword.includes('leadership') || keyword.includes('communication') ||
+               keyword.includes('problem solving') || keyword.includes('team')) {
+      weight = weights.soft;
+    }
+
+    totalWeight += weight;
+    
+    // Check for keyword matches with variations
+    if (contentLower.includes(keyword.toLowerCase())) {
+      matchedKeywords += weight;
+    } else {
+      // Check for partial matches in technical skills
+      if (weight === weights.technical) {
+        const partialMatch = keyword.split(' ').some(part => 
+          contentLower.includes(part.toLowerCase())
+        );
+        if (partialMatch) {
+          matchedKeywords += weight * 0.8; // 80% credit for partial matches
+        }
       }
     }
-    
-    // Format bullet points
-    section = section.replace(/^[-•*]\s*/gm, '• ');
-    
-    // Add spacing between sections
-    return section + '\n\n';
   });
-  
-  return formattedSections.join('');
+
+  // Calculate base score
+  let score = (matchedKeywords / totalWeight) * 100;
+
+  // Add bonus points for keyword density
+  const keywordDensity = matchedKeywords / (contentLower.split(/\s+/).length / 100);
+  if (keywordDensity > 2) {
+    score += Math.min(10, (keywordDensity - 2) * 2); // Up to 10 bonus points
+  }
+
+  // Ensure minimum score of 80% if we have good keyword coverage
+  if (matchedKeywords > totalWeight * 0.7) {
+    score = Math.max(80, score);
+  }
+
+  return Math.round(score);
 }
 
 export async function generateDownloadFile(content: string, format: 'pdf' | 'docx' | 'txt'): Promise<Blob> {
@@ -141,6 +388,11 @@ export async function generateDownloadFile(content: string, format: 'pdf' | 'doc
             doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
             doc.text(line, 20, y);
+          } else if (line.startsWith('•')) {
+            // This is a bullet point
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text(line, 25, y); // Indent bullet points
           } else {
             // This is regular content
             doc.setFontSize(12);
@@ -161,7 +413,7 @@ export async function generateDownloadFile(content: string, format: 'pdf' | 'doc
           properties: {},
           children: content.split('\n\n').map(section => {
             const lines = section.split('\n');
-            const children = lines.map((line, index) => {
+            return lines.map(line => {
               if (line.trim().toUpperCase() === line.trim()) {
                 // This is a section header
                 return new Paragraph({
@@ -169,6 +421,24 @@ export async function generateDownloadFile(content: string, format: 'pdf' | 'doc
                   heading: HeadingLevel.HEADING_1,
                   spacing: {
                     after: 200,
+                    line: 360,
+                  },
+                });
+              } else if (line.startsWith('•')) {
+                // This is a bullet point
+                return new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: line,
+                      font: 'Arial',
+                      size: 24,
+                    }),
+                  ],
+                  indent: {
+                    left: 720, // 0.5 inch indent
+                  },
+                  spacing: {
+                    after: 100,
                     line: 360,
                   },
                 });
@@ -189,7 +459,6 @@ export async function generateDownloadFile(content: string, format: 'pdf' | 'doc
                 });
               }
             });
-            return children;
           }).flat(),
         }],
       });
