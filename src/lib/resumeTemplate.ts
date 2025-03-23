@@ -1,288 +1,241 @@
-export interface ResumeData {
-  personalInfo: {
-    name: string;
+interface ResumeData {
+  name: string;
+  contact: {
     email: string;
     phone: string;
     location: string;
+    linkedin?: string;
   };
   summary: string;
-  experience: Array<{
-    company: string;
-    position: string;
-    period: string;
-    description: string[];
-  }>;
   education: Array<{
     institution: string;
     degree: string;
-    period: string;
-    description: string[];
+    date: string;
+    gpa?: string;
+  }>;
+  experience: Array<{
+    company: string;
+    role: string;
+    date: string;
+    achievements: string[];
+  }>;
+  projects: Array<{
+    name: string;
+    description: string;
+    technologies: string[];
   }>;
   skills: {
     technical: string[];
     soft: string[];
   };
-  projects: Array<{
-    name: string;
-    description: string[];
-    technologies: string[];
-  }>;
-  languages: Array<{
-    name: string;
-    level: string;
-  }>;
 }
 
 export function formatResumeContent(content: string, jobDescription: string): string {
-  // Split content into sections
-  const sections = content.split(/\n\s*\n/);
-  let formattedContent = '';
+  // Extract sections from content
+  const sections = content.split('\n\n');
+  const resumeData: Partial<ResumeData> = {
+    name: '',
+    contact: {
+      email: '',
+      phone: '',
+      location: '',
+      linkedin: ''
+    },
+    summary: '',
+    education: [],
+    experience: [],
+    projects: [],
+    skills: {
+      technical: [],
+      soft: []
+    }
+  };
 
   // Process each section
+  let currentSection = '';
+  let currentExperience: any = null;
+  let currentEducation: any = null;
+  let currentProject: any = null;
+
   sections.forEach(section => {
     const lines = section.split('\n');
-    const header = lines[0].trim();
-    const content = lines.slice(1).join('\n').trim();
-
-    // Format based on section type
-    switch (header.toUpperCase()) {
-      case 'PERSONAL INFORMATION':
-        formattedContent += formatPersonalInfo(content);
+    const header = lines[0].trim().toUpperCase();
+    
+    switch (header) {
+      case 'NAME':
+        resumeData.name = lines[1]?.trim() || '';
         break;
-      case 'PROFESSIONAL SUMMARY':
+      
+      case 'CONTACT':
+        lines.slice(1).forEach(line => {
+          const [key, value] = line.split(':').map(s => s.trim());
+          if (key && value) {
+            switch (key.toLowerCase()) {
+              case 'email':
+                resumeData.contact!.email = value;
+                break;
+              case 'phone':
+                resumeData.contact!.phone = value;
+                break;
+              case 'location':
+                resumeData.contact!.location = value;
+                break;
+              case 'linkedin':
+                resumeData.contact!.linkedin = value;
+                break;
+            }
+          }
+        });
+        break;
+      
       case 'SUMMARY':
-        formattedContent += formatSummary(content, jobDescription);
+        resumeData.summary = lines.slice(1).join('\n').trim();
         break;
-      case 'EXPERIENCE':
-      case 'WORK EXPERIENCE':
-        formattedContent += formatExperience(content, jobDescription);
-        break;
+      
       case 'EDUCATION':
-        formattedContent += formatEducation(content);
+        currentSection = 'education';
         break;
-      case 'SKILLS':
-        formattedContent += formatSkills(content, jobDescription);
+      
+      case 'EXPERIENCE':
+        currentSection = 'experience';
         break;
+      
       case 'PROJECTS':
-        formattedContent += formatProjects(content, jobDescription);
+        currentSection = 'projects';
         break;
-      case 'LANGUAGES':
-        formattedContent += formatLanguages(content);
+      
+      case 'SKILLS':
+        currentSection = 'skills';
         break;
+      
       default:
-        formattedContent += `${header}\n${content}\n\n`;
+        if (currentSection === 'education' && lines[0].includes('University') || lines[0].includes('College')) {
+          if (currentEducation) {
+            resumeData.education!.push(currentEducation);
+          }
+          currentEducation = {
+            institution: lines[0].trim(),
+            degree: lines[1]?.trim() || '',
+            date: lines[2]?.trim() || '',
+            gpa: lines[3]?.trim() || ''
+          };
+        } else if (currentSection === 'experience' && lines[0].includes('Company')) {
+          if (currentExperience) {
+            resumeData.experience!.push(currentExperience);
+          }
+          currentExperience = {
+            company: lines[0].trim(),
+            role: lines[1]?.trim() || '',
+            date: lines[2]?.trim() || '',
+            achievements: []
+          };
+        } else if (currentSection === 'projects' && lines[0].includes('Project')) {
+          if (currentProject) {
+            resumeData.projects!.push(currentProject);
+          }
+          currentProject = {
+            name: lines[0].trim(),
+            description: lines[1]?.trim() || '',
+            technologies: []
+          };
+        } else if (currentSection === 'skills') {
+          if (lines[0].toLowerCase().includes('technical')) {
+            resumeData.skills!.technical = lines[1]?.split(',').map(s => s.trim()) || [];
+          } else if (lines[0].toLowerCase().includes('soft')) {
+            resumeData.skills!.soft = lines[1]?.split(',').map(s => s.trim()) || [];
+          }
+        } else if (currentExperience && lines[0].startsWith('•')) {
+          currentExperience.achievements.push(lines[0].trim());
+        } else if (currentProject && lines[0].startsWith('•')) {
+          currentProject.technologies.push(lines[0].trim().substring(1));
+        }
     }
   });
 
-  return formattedContent.trim();
-}
+  // Push the last items if they exist
+  if (currentEducation) {
+    resumeData.education!.push(currentEducation);
+  }
+  if (currentExperience) {
+    resumeData.experience!.push(currentExperience);
+  }
+  if (currentProject) {
+    resumeData.projects!.push(currentProject);
+  }
 
-function formatPersonalInfo(content: string): string {
-  const lines = content.split('\n');
-  const info = lines.reduce((acc, line) => {
-    const [key, value] = line.split(':').map(s => s.trim());
-    if (key && value) {
-      acc[key.toLowerCase()] = value;
-    }
-    return acc;
-  }, {} as Record<string, string>);
+  // Format the resume with enhanced styling and spacing
+  const formattedResume = [
+    // Header with decorative line
+    `${resumeData.name}`,
+    '='.repeat(50),
+    '\n',
+    
+    // Contact Information in a clean layout
+    'CONTACT INFORMATION',
+    '-'.repeat(30),
+    `📧 ${resumeData.contact?.email}`,
+    `📱 ${resumeData.contact?.phone}`,
+    `📍 ${resumeData.contact?.location}`,
+    resumeData.contact?.linkedin ? `🔗 ${resumeData.contact.linkedin}` : '',
+    '\n',
+    
+    // Professional Summary with emphasis
+    'PROFESSIONAL SUMMARY',
+    '-'.repeat(30),
+    resumeData.summary,
+    '\n',
+    
+    // Education with clear hierarchy
+    'EDUCATION',
+    '-'.repeat(30),
+    ...resumeData.education!.map(edu => [
+      `🏫 ${edu.institution}`,
+      `📚 ${edu.degree}`,
+      `📅 ${edu.date}`,
+      edu.gpa ? `📊 GPA: ${edu.gpa}` : '',
+      '\n'
+    ].join('\n')),
+    
+    // Experience with bullet points and dates
+    'PROFESSIONAL EXPERIENCE',
+    '-'.repeat(30),
+    ...resumeData.experience!.map(exp => [
+      `🏢 ${exp.company}`,
+      `👨‍💼 ${exp.role}`,
+      `📅 ${exp.date}`,
+      '',
+      ...exp.achievements.map(achievement => `• ${achievement}`),
+      '\n'
+    ].join('\n')),
+    
+    // Projects with clear structure
+    'PROJECTS',
+    '-'.repeat(30),
+    ...resumeData.projects!.map(proj => [
+      `🚀 ${proj.name}`,
+      proj.description,
+      '',
+      'Technologies Used:',
+      ...proj.technologies.map(tech => `• ${tech}`),
+      '\n'
+    ].join('\n')),
+    
+    // Skills with visual separation
+    'SKILLS',
+    '-'.repeat(30),
+    'Technical Skills:',
+    ...resumeData.skills!.technical.map(skill => `• ${skill}`),
+    '\n',
+    'Soft Skills:',
+    ...resumeData.skills!.soft.map(skill => `• ${skill}`),
+  ].join('\n');
 
-  return `PERSONAL INFORMATION
-${info.name || 'Your Name'}
-${info.email || 'your.email@example.com'} | ${info.phone || '(123) 456-7890'}
-${info.location || 'City, State ZIP'}
-
-`;
-}
-
-function formatSummary(content: string, jobDescription: string): string {
-  // Extract key requirements from job description
-  const requirements = jobDescription
-    .split('\n')
-    .filter(line => line.trim().startsWith('•'))
-    .map(line => line.trim().substring(1).trim());
-
-  // Create a more targeted summary
-  const summary = content + '\n\n' + 
-    requirements.slice(0, 3).map(req => 
-      `• ${req}`
-    ).join('\n');
-
-  return `PROFESSIONAL SUMMARY
-${summary}
-
-`;
-}
-
-function formatExperience(content: string, jobDescription: string): string {
-  const experiences = content.split('\n\n');
-  return `PROFESSIONAL EXPERIENCE
-${experiences.map(exp => {
-  const lines = exp.split('\n');
-  const [company, position, period] = lines.slice(0, 3);
-  const description = lines.slice(3);
-  
-  // Enhance bullet points with relevant keywords
-  const enhancedDescription = description.map(line => {
-    const bullet = line.trim().startsWith('•') ? line.trim().substring(1).trim() : line.trim();
-    const keywords = extractKeywords(jobDescription);
-    const relevantKeywords = keywords.filter(keyword => 
-      !bullet.toLowerCase().includes(keyword.toLowerCase())
-    ).slice(0, 2);
-
-    if (relevantKeywords.length > 0) {
-      return `• ${bullet} utilizing ${relevantKeywords.join(' and ')}`;
-    }
-    return `• ${bullet}`;
-  });
-  
-  return `${company}
-${position} | ${period}
-${enhancedDescription.join('\n')}
-`;
-}).join('\n')}
-
-`;
-}
-
-function formatEducation(content: string): string {
-  const educations = content.split('\n\n');
-  return `EDUCATION
-${educations.map(edu => {
-  const lines = edu.split('\n');
-  const [institution, degree, period] = lines.slice(0, 3);
-  const description = lines.slice(3);
-  
-  return `${institution}
-${degree} | ${period}
-${description.map(line => `• ${line}`).join('\n')}
-`;
-}).join('\n')}
-
-`;
-}
-
-function formatSkills(content: string, jobDescription: string): string {
-  const lines = content.split('\n');
-  const technicalSkills: string[] = [];
-  const softSkills: string[] = [];
-  const keywords = extractKeywords(jobDescription);
-
-  // Extract existing skills
-  lines.forEach(line => {
-    if (line.toLowerCase().includes('technical')) {
-      technicalSkills.push(...line.split(':')[1].split(',').map(s => s.trim()));
-    } else if (line.toLowerCase().includes('soft')) {
-      softSkills.push(...line.split(':')[1].split(',').map(s => s.trim()));
-    }
-  });
-
-  // Add relevant keywords as skills if not already present
-  keywords.forEach(keyword => {
-    if (isTechnicalSkill(keyword) && !technicalSkills.includes(keyword)) {
-      technicalSkills.push(keyword);
-    } else if (isSoftSkill(keyword) && !softSkills.includes(keyword)) {
-      softSkills.push(keyword);
-    }
-  });
-
-  return `SKILLS
-Technical Skills: ${technicalSkills.join(', ')}
-Soft Skills: ${softSkills.join(', ')}
-
-`;
-}
-
-function formatProjects(content: string, jobDescription: string): string {
-  const projects = content.split('\n\n');
-  return `PROJECTS
-${projects.map(project => {
-  const lines = project.split('\n');
-  const [name, ...description] = lines;
-  
-  // Enhance project descriptions with relevant keywords
-  const enhancedDescription = description.map(line => {
-    const bullet = line.trim().startsWith('•') ? line.trim().substring(1).trim() : line.trim();
-    const keywords = extractKeywords(jobDescription);
-    const relevantKeywords = keywords.filter(keyword => 
-      !bullet.toLowerCase().includes(keyword.toLowerCase())
-    ).slice(0, 2);
-
-    if (relevantKeywords.length > 0) {
-      return `• ${bullet} using ${relevantKeywords.join(' and ')}`;
-    }
-    return `• ${bullet}`;
-  });
-  
-  return `${name}
-${enhancedDescription.join('\n')}
-`;
-}).join('\n')}
-
-`;
-}
-
-function formatLanguages(content: string): string {
-  const languages = content.split('\n');
-  return `LANGUAGES
-${languages.map(lang => {
-  const [name, level] = lang.split(':').map(s => s.trim());
-  return `${name} - ${level}`;
-}).join('\n')}
-
-`;
-}
-
-function extractKeywords(jobDescription: string): string[] {
-  const words = jobDescription.toLowerCase().split(/\s+/);
-  const phrases = jobDescription.toLowerCase().split(/[.,]/).map(p => p.trim());
-  const keywords = new Set<string>();
-
-  // Add individual words
-  words.forEach(word => {
-    if (word.length > 3 && !['the', 'and', 'for', 'with', 'from', 'have', 'were', 'this', 'that', 'these', 'those', 'they', 'their', 'there'].includes(word)) {
-      keywords.add(word);
-    }
-  });
-
-  // Add phrases
-  phrases.forEach(phrase => {
-    if (phrase.length > 5 && !phrase.includes('and') && !phrase.includes('the')) {
-      keywords.add(phrase);
-    }
-  });
-
-  return Array.from(keywords);
-}
-
-function isTechnicalSkill(skill: string): boolean {
-  const technicalKeywords = [
-    'javascript', 'python', 'java', 'c++', 'sql', 'html', 'css',
-    'react', 'angular', 'vue', 'node.js', 'express', 'mongodb',
-    'aws', 'docker', 'kubernetes', 'git', 'agile', 'scrum',
-    'machine learning', 'data analysis', 'cloud computing',
-    'typescript', 'next.js', 'graphql', 'rest api', 'microservices',
-    'ci/cd', 'devops', 'testing', 'debugging', 'code review',
-    'web development', 'mobile development', 'database', 'api',
-    'frontend', 'backend', 'full stack', 'ui/ux', 'responsive design'
-  ];
-
-  return technicalKeywords.some(keyword => 
-    skill.toLowerCase().includes(keyword.toLowerCase())
-  );
-}
-
-function isSoftSkill(skill: string): boolean {
-  const softKeywords = [
-    'leadership', 'communication', 'problem solving', 'team',
-    'management', 'analytical', 'creative', 'organized',
-    'detail-oriented', 'results-driven', 'innovative',
-    'collaborative', 'strategic', 'efficient', 'proactive',
-    'responsible', 'dedicated', 'motivated', 'self-starter',
-    'team player', 'attention to detail', 'time management'
-  ];
-
-  return softKeywords.some(keyword => 
-    skill.toLowerCase().includes(keyword.toLowerCase())
-  );
+  // Clean up the formatting
+  return formattedResume
+    .replace(/\n{4,}/g, '\n\n\n') // Replace excessive line breaks with triple line breaks
+    .replace(/([A-Z][A-Z\s]+)\n/g, '\n$1\n\n') // Add spacing around section headers
+    .replace(/([A-Z][A-Z\s]+)\n/g, '\n$1\n\n') // Ensure consistent spacing
+    .replace(/([A-Z][A-Z\s]+)\n/g, '\n$1\n\n') // Maintain visual hierarchy
+    .replace(/\n{3,}/g, '\n\n') // Replace multiple line breaks with double line breaks
+    .trim();
 } 

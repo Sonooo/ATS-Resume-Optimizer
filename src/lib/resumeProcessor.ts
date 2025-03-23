@@ -1,11 +1,14 @@
 import * as mammoth from 'mammoth';
-import * as PDFJS from 'pdfjs-dist/build/pdf';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import * as pdfjsLib from 'pdfjs-dist';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { jsPDF } from 'jspdf';
 import { formatResumeContent } from './resumeTemplate';
+import { saveAs } from 'file-saver';
 
-// Configure PDF.js worker
-PDFJS.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+// Initialize PDF.js worker
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+}
 
 export interface ProcessedResume {
   content: string;
@@ -15,19 +18,36 @@ export interface ProcessedResume {
 }
 
 export async function processResume(file: File, jobDescription: string = ''): Promise<ProcessedResume> {
+  console.log('Starting resume processing...');
+  let content = '';
+  let fileType = '';
+
   try {
-    console.log('Processing resume for job description:', jobDescription);
-    
-    // Extract content from file
-    let content = '';
-    if (file.type === 'application/pdf') {
-      content = await extractPdfContent(file);
-    } else if (file.type.includes('word')) {
-      content = await extractDocxContent(file);
-    } else {
+    // Determine file type
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      fileType = 'pdf';
+      console.log('Processing PDF file...');
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const textContent = await page.getTextContent();
+      content = textContent.items.map((item: any) => item.str).join(' ');
+      console.log('PDF content extracted:', content.substring(0, 100) + '...');
+    } else if (file.name.toLowerCase().endsWith('.docx')) {
+      fileType = 'docx';
+      console.log('Processing DOCX file...');
+      const arrayBuffer = await file.arrayBuffer();
+      const docx = await mammoth.extractRawText({ arrayBuffer });
+      content = docx.value;
+      console.log('DOCX content extracted:', content.substring(0, 100) + '...');
+    } else if (file.name.toLowerCase().endsWith('.txt')) {
+      fileType = 'txt';
+      console.log('Processing TXT file...');
       content = await file.text();
+      console.log('TXT content extracted:', content.substring(0, 100) + '...');
+    } else {
+      throw new Error('Unsupported file format');
     }
-    console.log('Extracted content:', content);
 
     // Extract keywords from job description
     const keywords = extractKeywords(jobDescription);
@@ -62,28 +82,8 @@ export async function processResume(file: File, jobDescription: string = ''): Pr
     };
   } catch (error) {
     console.error('Error processing resume:', error);
-    throw new Error('Failed to process resume. Please try again.');
+    throw error;
   }
-}
-
-async function extractPdfContent(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await PDFJS.getDocument({ data: arrayBuffer }).promise;
-  let content = '';
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    content += textContent.items.map((item: any) => item.str).join(' ');
-  }
-
-  return content;
-}
-
-async function extractDocxContent(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
 }
 
 function extractKeywords(jobDescription: string): string[] {
@@ -535,9 +535,9 @@ export async function generateDownloadFile(content: string, format: 'pdf' | 'doc
               } else {
                 // This is regular content
                 return new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: line,
+              children: [
+                new TextRun({
+                  text: line,
                       font: 'Arial',
                       size: 24,
                     }),
