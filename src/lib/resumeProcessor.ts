@@ -7,7 +7,11 @@ import { saveAs } from 'file-saver';
 
 // Initialize PDF.js worker
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // Use local worker file in production, fallback to CDN in development
+  const isDev = process.env.NODE_ENV === 'development';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = isDev
+    ? '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    : '/pdf.worker.min.js';
 }
 
 export interface ProcessedResume {
