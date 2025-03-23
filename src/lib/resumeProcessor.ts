@@ -7,11 +7,23 @@ import { saveAs } from 'file-saver';
 
 // Initialize PDF.js worker
 if (typeof window !== 'undefined') {
-  // Use local worker file in production, fallback to CDN in development
-  const isDev = process.env.NODE_ENV === 'development';
-  pdfjsLib.GlobalWorkerOptions.workerSrc = isDev
-    ? '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-    : '/pdf.worker.min.js';
+  try {
+    // Try to load the worker from the public directory first
+    const workerUrl = '/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    
+    // Verify worker is loaded
+    const worker = new Worker(workerUrl);
+    worker.onerror = (error) => {
+      console.error('PDF.js worker failed to load:', error);
+      // Fallback to CDN if local worker fails
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    };
+  } catch (error) {
+    console.error('Error initializing PDF.js worker:', error);
+    // Fallback to CDN
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
 }
 
 export interface ProcessedResume {

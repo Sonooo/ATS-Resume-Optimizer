@@ -6,7 +6,8 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['pdfjs-dist', 'docx', 'mammoth'],
+    include: ['pdfjs-dist', 'docx', 'mammoth', 'jspdf'],
+    exclude: ['pdfjs-dist/build/pdf.worker'],
   },
   build: {
     commonjsOptions: {
@@ -19,14 +20,22 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]',
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]',
         manualChunks: {
           pdfjs: ['pdfjs-dist'],
           docx: ['docx'],
           mammoth: ['mammoth'],
+          jspdf: ['jspdf'],
         },
+      },
+    },
+    sourcemap: true,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false,
       },
     },
   },

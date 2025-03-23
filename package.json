@@ -7,8 +7,11 @@
     "prebuild": "node scripts/copy-pdf-worker.js",
     "dev": "vite",
     "build": "tsc && vite build",
+    "postbuild": "node scripts/verify-build.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "rimraf dist public/pdf.worker.min.js",
+    "build:prod": "npm run clean && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
@@ -45,7 +48,9 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.35",
+    "rimraf": "^5.0.5",
     "tailwindcss": "^3.4.1",
+    "terser": "^5.27.2",
     "typescript": "^5.3.3",
     "vite": "^5.1.4"
   }
